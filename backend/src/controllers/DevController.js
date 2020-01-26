@@ -1,6 +1,7 @@
 const axios = require('axios');
 const Dev = require('../models/Dev');
 const parseStringAsArray = require('../utils/parseStringAsArray');
+const { findConnections, sendMessage } = require('../websocket');
 
 module.exports = {
     async index(req, resp) {
@@ -32,7 +33,7 @@ module.exports = {
             await axios.get(`https://api.github.com/users/${github_username}`)
                 .then(async apiResponse => {
 
-                    console.log(apiResponse);
+                    // console.log(apiResponse);
         
                     const { name = login, avatar_url, bio } = apiResponse.data;
                 
@@ -58,7 +59,7 @@ module.exports = {
                     status = dev._id ? 201 : 500;
                 })
                 .catch(err => {
-                    console.log(err);
+                    // console.log(err);
                     if (err.message.indexOf(404) > -1) {
                         error = 'Usuário não encontrado no GitHub';
                         status = 400;
@@ -75,6 +76,22 @@ module.exports = {
             success: status == 201,
             error,
         };
+
+        // If dev was created
+        if (status == 201) {
+            // Send it via websocket to frontend, but only for users that are in in a radius of 10km 
+            // and the some requested techs are one that created user informed
+            const sendSocketMessageTo = findConnections(
+                { latitude, longitude }, 
+                dev.techs
+            );
+
+            console.log(' ------------ ');
+            console.log('DADOS DO DEV CADASTRADO: ', dev.github_username, { latitude, longitude }, dev.techs);
+            console.log(' ------------ ');
+            console.log('ACHEI: ', sendSocketMessageTo);
+            sendMessage(sendSocketMessageTo, 'devCreated', dev);
+        }
 
         resp.status(status);
         resp.json(result);
